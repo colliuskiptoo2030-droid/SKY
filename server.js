@@ -14,7 +14,19 @@ const io = new Server(server, {
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Serve static assets (CSS, JS, images) from public/ folder
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Explicit Route 1: Serve Main Game Page
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Explicit Route 2: Serve Admin Radar Page
+app.get('/admin', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
 
 // In-Memory Storage (Replace with DB for production)
 const userBalances = {};
@@ -236,5 +248,5 @@ io.on('connection', (socket) => {
 // ==========================================
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-    console.log(`🚀 Skyrush Game Server running on http://localhost:${PORT}`);
+    console.log(`🚀 Skyrush Game Server running on port ${PORT}`);
 });
