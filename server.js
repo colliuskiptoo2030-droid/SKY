@@ -15,17 +15,17 @@ const io = new Server(server, {
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Serve static assets (CSS, JS, images) from public/ folder
-app.use(express.static(path.join(__dirname, 'public')));
+// Serve static assets directly from the root directory
+app.use(express.static(__dirname));
 
-// Explicit Route 1: Serve Main Game Page
+// Route 1: Serve Main Game Page from root
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Explicit Route 2: Serve Admin Radar Page
+// Route 2: Serve Admin Radar Page from root
 app.get('/admin', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+    res.sendFile(path.join(__dirname, 'admin.html'));
 });
 
 // In-Memory Storage (Replace with DB for production)
