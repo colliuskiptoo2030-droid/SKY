@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>SkyRush - Admin Multiplier Radar</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    body { background: #070a12; color: #fff; font-family: sans-serif; padding: 20px; }
+    .card { background: #101725; border: 1px solid #222c40; padding: 24px; border-radius: 12px; max-width: 500px; margin: auto; }
+    .crash-box { font-size: 52px; font-weight: 900; color: #ffb62e; text-align: center; margin: 20px 0; background: #182236; padding: 20px; border-radius: 10px; }
+    .status { font-size: 14px; color: #22d39a; text-align: center; }
+    .history-list { font-family: monospace; max-height: 200px; overflow-y: auto; background: #090e18; padding: 10px; border-radius: 6px; }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <h2>🎯 Admin Crash Radar</h2>
+    <div class="status" id="status">Connecting to radar...</div>
+    
+    <div style="text-align: center; margin-top: 15px; color: #7e8ba1;">UPCOMING CRASH POINT</div>
+    <div class="crash-box" id="nextCrash">WAITING...</div>
+
+    <h3>Crash History Feed</h3>
+    <div class="history-list" id="feed"></div>
+  </div>
+
+  <script>
+    const socket = io();
+    const SECRET_KEY = 'SUPER_SECRET_ADMIN_KEY'; // Matches key in server.js
+
+    socket.on('connect', () => {
+      document.getElementById('status').textContent = 'Authenticating...';
+      socket.emit('join_admin', SECRET_KEY);
+    });
+
+    socket.on('admin_auth_success', (msg) => {
+      document.getElementById('status').textContent = '🟢 Connected & Receiving Live Telemetry';
+    });
+
+    socket.on('admin_auth_failed', () => {
+      document.getElementById('status').textContent = '🔴 Auth Failed! Invalid Key.';
+      document.getElementById('status').style.color = '#ff3d71';
+    });
+
+    socket.on('admin_next_crash', (data) => {
+      const crashDisplay = document.getElementById('nextCrash');
+      crashDisplay.textContent = data.nextCrash.toFixed(2) + 'x';
+      
+      if (data.nextCrash < 1.5) {
+        crashDisplay.style.color = '#ff3d71';
+      } else if (data.nextCrash >= 10.0) {
+        crashDisplay.style.color = '#22d39a';
+      } else {
+        crashDisplay.style.color = '#ffb62e';
+      }
+
+      const item = document.createElement('div');
+      item.textContent = `[Round #${data.roundId}] Target: ${data.nextCrash.toFixed(2)}x`;
+      document.getElementById('feed').prepend(item);
+    });
+  </script>
+</body>
+</html>

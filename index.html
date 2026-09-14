@@ -1,0 +1,733 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SkyRush Demo Platform</title>
+  <!-- Socket.io client library -->
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #070a12; color: #eef2f8; }
+    button, input, select { font: inherit; }
+    
+    nav { height: 64px; background: #111725; border-bottom: 1px solid #222b3d; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; }
+    .logo { font-size: 22px; font-weight: 900; letter-spacing: 1px; }
+    .logo b { color: #ff3d71; }
+    .nav-actions { display: flex; gap: 10px; align-items: center; }
+    .navbtn { background: #1a2232; color: #fff; border: 1px solid #2a354a; padding: 8px 14px; border-radius: 9px; cursor: pointer; display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 13px; }
+    .navbtn:hover { background: #222c40; }
+    .navbtn.primary { background: #ff3d71; border-color: #ff3d71; }
+    
+    .wrap { max-width: 1400px; margin: 20px auto; padding: 0 16px; }
+    .tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+    .tabs button { background: #111725; color: #aeb8c9; border: 1px solid #252f43; padding: 10px 16px; border-radius: 9px; cursor: pointer; font-weight: 600; }
+    .tabs button:hover { background: #172133; }
+    .tabs button.active { color: #fff; border-color: #ff3d71; background: #1a2232; }
+    
+    .page { display: none; }
+    .page.active { display: block; }
+    
+    /* Layout Grids */
+    .game-layout { display: grid; grid-template-columns: 320px 1fr 280px; gap: 16px; }
+    .card { background: #101725; border: 1px solid #222c40; border-radius: 15px; padding: 16px; position: relative; }
+    
+    /* Canvas Game Area */
+    .game-container { height: 420px; background: #090e18; border-radius: 12px; position: relative; overflow: hidden; border: 1px solid #1e283d; }
+    canvas { width: 100%; height: 100%; display: block; }
+    .game-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; padding: 16px; }
+    .mult-display { font-size: 64px; font-weight: 900; text-align: center; margin-top: auto; margin-bottom: auto; text-shadow: 0 0 25px rgba(0,0,0,0.8); z-index: 5; }
+    .mult-display.crashed { color: #ff3d71; }
+    .state-badge { background: rgba(17, 23, 37, 0.85); backdrop-filter: blur(4px); padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; color: #8e9bb0; border: 1px solid #252f43; width: fit-content; }
+    
+    /* Dual Control Panels */
+    .dual-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
+    .control-box { background: #141c2e; border: 1px solid #222d42; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+    .box-header { font-size: 12px; font-weight: 700; color: #aeb8c9; display: flex; justify-content: space-between; }
+    .input-group { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .field { background: #182236; border: 1px solid #2a3752; border-radius: 8px; padding: 8px 10px; }
+    .field small { display: block; color: #7e8ba1; font-size: 10px; font-weight: 700; margin-bottom: 2px; }
+    .field input { width: 100%; background: transparent; border: 0; outline: 0; color: #fff; font-weight: 700; font-size: 14px; }
+    
+    .btn { border: 0; border-radius: 8px; padding: 12px; font-weight: 800; cursor: pointer; transition: all 0.2s; font-size: 14px; text-align: center; }
+    .btn:hover { opacity: 0.9; }
+    .btn-bet { background: #22d39a; color: #070a12; }
+    .btn-cash { background: #ffb62e; color: #070a12; }
+    .btn-cash:disabled, .btn-bet:disabled { opacity: .35; cursor: not-allowed; }
+    
+    /* Sidebar Bets & Chat */
+    .sidebar-tabs { display: flex; gap: 4px; margin-bottom: 10px; border-bottom: 1px solid #202a3b; padding-bottom: 8px; }
+    .sidebar-tabs button { background: transparent; border: 0; color: #7e8ba1; font-size: 12px; font-weight: 700; cursor: pointer; padding: 4px 8px; border-radius: 6px; }
+    .sidebar-tabs button.active { color: #fff; background: #1e283d; }
+    
+    .live-bets-header { display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; color: #7e8ba1; padding-bottom: 8px; border-bottom: 1px solid #1a2334; margin-bottom: 4px; }
+    .list-box { height: 430px; overflow-y: auto; font-size: 12px; }
+    
+    .live-bet-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 4px; border-bottom: 1px solid #141c2c; font-size: 11px; }
+    .live-bet-row.cashed { background: rgba(34, 211, 154, 0.08); border-radius: 4px; }
+    .live-bet-user { display: flex; align-items: center; gap: 6px; color: #c0cbdd; font-weight: 600; }
+    .live-bet-val { font-weight: 700; color: #fff; }
+    .live-bet-mult { color: #22d39a; font-weight: 800; margin-left: 4px; }
+
+    .chat-box { display: flex; flex-direction: column; height: 460px; }
+    .chat-messages { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 4px; }
+    .chat-input { display: flex; gap: 6px; margin-top: 8px; }
+    .chat-input input { flex: 1; background: #182236; border: 1px solid #2a3752; border-radius: 8px; padding: 8px; color: #fff; font-size: 12px; }
+    
+    /* Pills & Tables */
+    .pills { display: flex; flex-wrap: wrap; gap: 6px; max-height: 80px; overflow-y: auto; margin-bottom: 12px; }
+    .pill { background: #1a2334; padding: 5px 9px; border-radius: 6px; font-size: 11px; font-weight: bold; border: 1px solid #253147; }
+    .pill.hot { color: #ff668d; border-color: #ff3d71; }
+    .row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #1a2334; color: #aeb8c9; font-size: 13px; }
+    
+    .table { width: 100%; border-collapse: collapse; }
+    .table th, .table td { text-align: left; padding: 10px; border-bottom: 1px solid #222c3d; font-size: 13px; }
+    .badge-win { color: #22d39a; font-weight: bold; }
+    .badge-loss { color: #ff3d71; font-weight: bold; }
+    
+    /* Modal System */
+    .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.75); backdrop-filter: blur(5px); z-index: 1000; align-items: center; justify-content: center; }
+    .modal.active { display: flex; }
+    .modal-card { background: #101725; border: 1px solid #28354d; border-radius: 16px; width: 100%; max-width: 400px; padding: 24px; position: relative; }
+    .modal-card h2 { margin-top: 0; font-size: 20px; }
+    .modal-card input { width: 100%; padding: 11px; margin: 8px 0; background: #182236; border: 1px solid #2a3752; border-radius: 8px; color: white; }
+    .close-modal { position: absolute; top: 16px; right: 16px; background: transparent; border: 0; color: #7e8ba1; font-size: 18px; cursor: pointer; }
+    
+    .statgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 15px; }
+    .stat { background: #171f2e; border: 1px solid #29354a; padding: 15px; border-radius: 11px; }
+    .stat strong { display: block; font-size: 20px; margin-top: 6px; color: #fff; }
+
+    @media(max-width: 1050px) {
+      .game-layout { grid-template-columns: 1fr; }
+      .dual-controls { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <div class="logo">SKY<b>RUSH</b></div>
+    <div class="nav-actions">
+      <button class="navbtn" onclick="openModal('depositModal')">💳 M-Pesa Deposit</button>
+      <button class="navbtn" id="soundBtn" onclick="toggleSound()">🔊 Sound On</button>
+      <span id="userLabel" style="font-weight: 700; color: #aeb8c9; margin-right: 4px;">Guest</span> 
+      <button class="navbtn" id="loginNavBtn" onclick="openModal('loginModal')">Login</button>
+      <button class="navbtn primary" id="regNavBtn" onclick="openModal('regModal')">Register</button>
+    </div>
+  </nav>
+
+  <div class="wrap">
+    <div class="tabs">
+      <button onclick="show('home')" id="t-home">Home</button>
+      <button onclick="show('game')" id="t-game" class="active">Game Engine</button>
+      <button onclick="show('wallet')" id="t-wallet">Wallet</button>
+      <button onclick="show('history')" id="t-history">History</button>
+      <button onclick="show('admin')" id="t-admin">Fairness & Admin</button>
+    </div>
+
+    <!-- HOME PAGE -->
+    <section id="home" class="page">
+      <div class="card">
+        <h1>Welcome to SkyRush Next-Gen Platform</h1>
+        <p>Synchronized live multiplayer crash platform.</p>
+        <button class="btn btn-bet" style="width: 200px;" onclick="show('game')">Launch Game Engine</button>
+      </div>
+    </section>
+
+    <!-- GAME PAGE -->
+    <section id="game" class="page active">
+      <div class="pills" id="rounds"></div>
+
+      <div class="game-layout">
+        <!-- LEFT: SIDEBAR BETS & CHAT -->
+        <div class="card">
+          <div class="sidebar-tabs">
+            <button class="active" id="btnSideBets" onclick="switchSidebar('bets')">Live Bets</button>
+            <button id="btnSideChat" onclick="switchSidebar('chat')">Live Chat</button>
+          </div>
+          
+          <div id="sideBets">
+            <div class="live-bets-header">
+              <span id="activePlayerCount">0 Bets</span>
+              <span id="activePlayerSum">KSh 0</span>
+            </div>
+            <div id="playerList" class="list-box"></div>
+          </div>
+
+          <div id="sideChat" class="chat-box" style="display: none;">
+            <div class="chat-messages" id="chatMsgs"></div>
+            <div class="chat-input">
+              <input id="chatInput" placeholder="Say something...">
+              <button class="navbtn primary">Send</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- CENTER: CANVAS & DUAL BET CONTROLS -->
+        <div>
+          <div class="game-container">
+            <canvas id="gameCanvas"></canvas>
+            <div class="game-overlay">
+              <div class="state-badge" id="stateBadge">Connecting to server...</div>
+              <div class="mult-display" id="mult">1.00x</div>
+              <div style="display: flex; justify-content: space-between; font-size: 12px; color: #7e8ba1;">
+                <span>Avatar: 
+                  <select id="avatarSelect" style="background: transparent; color: #fff; border: 0;" onchange="avatarChoice = this.value">
+                    <option value="✈️">Airplane (✈️)</option>
+                    <option value="🚀">Rocket (🚀)</option>
+                  </select>
+                </span>
+                <span id="seedHash">Server Sync: Active</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- DUAL BET PANELS -->
+          <div class="dual-controls">
+            <!-- PANEL 1 -->
+            <div class="control-box">
+              <div class="box-header"><span>BET PANEL 1</span> <span id="p1Status">—</span></div>
+              <div class="input-group">
+                <div class="field"><small>BET (KSh)</small><input id="b1Amount" type="number" value="50" min="10"></div>
+                <div class="field"><small>AUTO CASHOUT</small><input id="b1Auto" type="number" placeholder="Off" step="0.1"></div>
+              </div>
+              <button class="btn btn-bet" id="b1Btn" onclick="handleBetAction(1)">PLACE BET</button>
+            </div>
+
+            <!-- PANEL 2 -->
+            <div class="control-box">
+              <div class="box-header"><span>BET PANEL 2</span> <span id="p2Status">—</span></div>
+              <div class="input-group">
+                <div class="field"><small>BET (KSh)</small><input id="b2Amount" type="number" value="100" min="10"></div>
+                <div class="field"><small>AUTO CASHOUT</small><input id="b2Auto" type="number" placeholder="Off" step="0.1"></div>
+              </div>
+              <button class="btn btn-bet" id="b2Btn" onclick="handleBetAction(2)">PLACE BET</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT: STATS & USER INFO -->
+        <div class="card">
+          <h3>Session Summary</h3>
+          <div class="row"><span>Demo Balance</span><b id="bal">KSh 1,000.00</b></div>
+          <div class="row"><span>Total Active Bet</span><b id="totBet">KSh 0.00</b></div>
+          <div class="row"><span>Current Profit</span><b id="totProfit">KSh 0.00</b></div>
+          <hr style="border-color:#1e283d; margin: 15px 0;">
+          <button class="btn btn-bet" style="width: 100%;" onclick="openModal('depositModal')">Deposit via M-Pesa</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- WALLET PAGE -->
+    <section id="wallet" class="page">
+      <div class="card">
+        <h2>Virtual Wallet</h2>
+        <div class="statgrid">
+          <div class="stat">Balance<strong id="wbal">KSh 1,000.00</strong></div>
+          <div class="stat">Virtual Deposits<strong id="wdep">KSh 0.00</strong></div>
+          <div class="stat">Virtual Cashouts<strong id="wout">KSh 0.00</strong></div>
+        </div>
+        <button class="btn btn-bet" onclick="openModal('depositModal')">Deposit via M-Pesa</button>
+      </div>
+    </section>
+
+    <!-- HISTORY PAGE -->
+    <section id="history" class="page">
+      <div class="card">
+        <h2>Personal Bet History</h2>
+        <table class="table">
+          <thead>
+            <tr><th>Round</th><th>Panel</th><th>Bet</th><th>Result</th><th>Payout</th></tr>
+          </thead>
+          <tbody id="hist"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ADMIN PAGE -->
+    <section id="admin" class="page">
+      <div class="card">
+        <h2>Provably Fair Engine & Admin</h2>
+        <div class="statgrid">
+          <div class="stat">Total Rounds Played<strong id="adminRounds">0</strong></div>
+          <div class="stat">Virtual Volume<strong id="adminVol">KSh 0.00</strong></div>
+          <div class="stat">Server Seed State<strong style="color: #22d39a;">SYNCHRONIZED SOCKET</strong></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- MODALS -->
+  <div class="modal" id="depositModal">
+    <div class="modal-card">
+      <button class="close-modal" onclick="closeModal('depositModal')">✕</button>
+      <h2>Deposit via M-Pesa</h2>
+      <label style="font-size: 12px; color: #aeb8c9;">Phone Number</label>
+      <input id="stkPhone" type="text" placeholder="254700000000" value="254700000000">
+      <label style="font-size: 12px; color: #aeb8c9;">Amount (Min KSh 50)</label>
+      <input id="stkAmount" type="number" min="50" value="50">
+      <button class="btn btn-bet" id="stkBtn" style="width: 100%; margin-top: 10px;" onclick="sendPaymentRequest()">Send STK Push</button>
+      <p id="stkMsg" style="margin-top: 12px; font-size: 13px; text-align: center; font-weight: 600;"></p>
+    </div>
+  </div>
+
+  <div class="modal" id="loginModal">
+    <div class="modal-card">
+      <button class="close-modal" onclick="closeModal('loginModal')">✕</button>
+      <h2>Login to SkyRush</h2>
+      <label>Email Address</label>
+      <input id="loginEmail" type="email" placeholder="Enter your email">
+      <label>Password</label>
+      <input id="loginPass" type="password" placeholder="Enter your password">
+      <button class="btn btn-bet" style="width:100%; margin-top:10px;">Login</button>
+    </div>
+  </div>
+
+  <div class="modal" id="regModal">
+    <div class="modal-card">
+      <button class="close-modal" onclick="closeModal('regModal')">✕</button>
+      <h2>Create SkyRush Account</h2>
+      <label>Display Name</label>
+      <input id="regName" placeholder="Choose a display name">
+      <label>Email Address</label>
+      <input id="regEmail" type="email" placeholder="Enter your email">
+      <label>Password</label>
+      <input id="regPass" type="password" placeholder="Create a password">
+      <button class="btn btn-bet" style="width:100%;margin-top:10px;">Create Account</button>
+    </div>
+  </div>
+
+  <script>
+    const socket = io();
+
+    let balance = 1000, totalDeposited = 0, roundNo = 0, volume = 0;
+    let inRound = false, mult = 1.00;
+    let avatarChoice = '✈️';
+    let soundEnabled = true;
+    let liveBots = [];
+
+    const botAvatars = ['👨‍💼', '👩‍💻', '🚀', '🦊', '🐯', '🦁', '⚡', '👑', '🎲', '💎', '🔥', '🎮'];
+    const botPrefixes = ['Ken', 'Alex', 'Brian', 'Dave', 'Sam', 'Grace', 'Mercy', 'John', 'Paul', 'Mike', 'Stacy', 'Chris', 'Victor', 'Otieno', 'Kip'];
+
+    const bets = {
+      1: { active: false, cashed: false, amount: 0, payout: 0 },
+      2: { active: false, cashed: false, amount: 0, payout: 0 }
+    };
+
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    let particles = [], stars = [];
+
+    function resizeCanvas() {
+      if (!canvas.parentElement) return;
+      canvas.width = canvas.parentElement.clientWidth;
+      canvas.height = canvas.parentElement.clientHeight;
+      initStars();
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    function initStars() {
+      stars = [];
+      for (let i = 0; i < 40; i++) {
+        stars.push({ x: Math.random() * canvas.width, y: Math.random() * canvas.height, size: Math.random() * 2, speed: Math.random() * 0.5 + 0.2 });
+      }
+    }
+
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    function playSound(type) {
+      if (!soundEnabled) return;
+      try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain); gain.connect(audioCtx.destination);
+
+        if (type === 'bet') {
+          osc.frequency.setValueAtTime(300, audioCtx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(600, audioCtx.currentTime + 0.12);
+          gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+          gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.12);
+          osc.start(); osc.stop(audioCtx.currentTime + 0.12);
+        } else if (type === 'win') {
+          osc.frequency.setValueAtTime(523, audioCtx.currentTime);
+          osc.frequency.setValueAtTime(659, audioCtx.currentTime + 0.1);
+          osc.frequency.setValueAtTime(783, audioCtx.currentTime + 0.2);
+          gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+          gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+          osc.start(); osc.stop(audioCtx.currentTime + 0.3);
+        } else if (type === 'crash') {
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(30, audioCtx.currentTime + 0.35);
+          gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+          gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.35);
+          osc.start(); osc.stop(audioCtx.currentTime + 0.35);
+        }
+      } catch (e) {}
+    }
+
+    function toggleSound() {
+      soundEnabled = !soundEnabled;
+      document.getElementById('soundBtn').textContent = soundEnabled ? '🔊 Sound On' : '🔇 Sound Off';
+    }
+
+    const $ = id => document.getElementById(id);
+    const money = x => 'KSh ' + Number(x).toFixed(2);
+
+    function show(pageId) {
+      document.querySelectorAll('.page').forEach(el => el.classList.remove('active'));
+      $(pageId).classList.add('active');
+      document.querySelectorAll('.tabs button').forEach(el => el.classList.remove('active'));
+      let t = $('t-' + pageId); if (t) t.classList.add('active');
+    }
+
+    function openModal(id) { $(id)?.classList.add('active'); }
+    function closeModal(id) { $(id)?.classList.remove('active'); }
+
+    function switchSidebar(tab) {
+      if (tab === 'bets') {
+        $('sideBets').style.display = 'block'; $('sideChat').style.display = 'none';
+        $('btnSideBets').classList.add('active'); $('btnSideChat').classList.remove('active');
+      } else {
+        $('sideBets').style.display = 'none'; $('sideChat').style.display = 'flex';
+        $('btnSideChat').classList.add('active'); $('btnSideBets').classList.remove('active');
+      }
+    }
+
+    // ==========================================
+    // MULTIPLAYER LIVE BOTS SIMULATOR
+    // ==========================================
+    function generateLiveBots() {
+      const count = Math.floor(Math.random() * 25) + 25; // 25 to 50 bots
+      liveBots = [];
+      const amounts = [50, 100, 200, 300, 500, 1000, 1500, 2500, 5000];
+
+      for (let i = 0; i < count; i++) {
+        const prefix = botPrefixes[Math.floor(Math.random() * botPrefixes.length)];
+        const maskNum = Math.floor(Math.random() * 89 + 10);
+        const name = `${prefix}***${maskNum}`;
+        const avatar = botAvatars[Math.floor(Math.random() * botAvatars.length)];
+        const amount = amounts[Math.floor(Math.random() * amounts.length)];
+        const targetMult = parseFloat((Math.random() * (12.0 - 1.15) + 1.15).toFixed(2));
+
+        liveBots.push({
+          id: i,
+          name,
+          avatar,
+          amount,
+          targetMult,
+          cashed: false,
+          payout: 0,
+          cashMult: 0
+        });
+      }
+      liveBots.sort((a, b) => b.amount - a.amount);
+      renderLiveBetsList();
+    }
+
+    function updateLiveBots(currentMult) {
+      liveBots.forEach(bot => {
+        if (!bot.cashed && currentMult >= bot.targetMult) {
+          bot.cashed = true;
+          bot.cashMult = bot.targetMult;
+          bot.payout = bot.amount * bot.targetMult;
+        }
+      });
+      renderLiveBetsList();
+    }
+
+    function renderLiveBetsList() {
+      const container = $('playerList');
+      if (!container) return;
+
+      let totalStakes = 0;
+      let html = '';
+
+      liveBots.forEach(bot => {
+        totalStakes += bot.amount;
+        if (bot.cashed) {
+          html += `
+            <div class="live-bet-row cashed">
+              <div class="live-bet-user"><span>${bot.avatar}</span> <span>${bot.name}</span></div>
+              <div>
+                <span class="live-bet-val">${money(bot.payout)}</span>
+                <span class="live-bet-mult">@${bot.cashMult.toFixed(2)}x</span>
+              </div>
+            </div>`;
+        } else {
+          html += `
+            <div class="live-bet-row">
+              <div class="live-bet-user"><span>${bot.avatar}</span> <span>${bot.name}</span></div>
+              <div><span class="live-bet-val">${money(bot.amount)}</span></div>
+            </div>`;
+        }
+      });
+
+      container.innerHTML = html;
+      $('activePlayerCount').textContent = `${liveBots.length} Bets`;
+      $('activePlayerSum').textContent = money(totalStakes);
+    }
+
+    // ==========================================
+    // M-PESA STK PUSH API & SOCKET LISTENER
+    // ==========================================
+    async function sendPaymentRequest() {
+      const phone = document.getElementById('stkPhone').value;
+      const amount = parseFloat(document.getElementById('stkAmount').value);
+      const msgEl = document.getElementById('stkMsg');
+      const btn = document.getElementById('stkBtn');
+
+      if (!phone) {
+        return alert('Please enter a valid phone number.');
+      }
+
+      if (isNaN(amount) || amount < 50) {
+        msgEl.style.color = '#ff3d71';
+        msgEl.textContent = 'Minimum deposit amount is KSh 50.';
+        return alert('Minimum deposit amount is KSh 50.');
+      }
+
+      btn.disabled = true;
+      msgEl.style.color = '#ffb62e';
+      msgEl.textContent = 'Sending STK Push prompt to your phone...';
+
+      try {
+        const res = await fetch('/api/mpesa/stkpush', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone, amount })
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          msgEl.style.color = '#22d39a';
+          msgEl.textContent = 'Prompt sent! Enter your M-Pesa PIN on your phone.';
+        } else {
+          msgEl.style.color = '#ff3d71';
+          msgEl.textContent = data.error || 'Failed to trigger payment.';
+        }
+      } catch (err) {
+        msgEl.style.color = '#ff3d71';
+        msgEl.textContent = 'Network error sending request.';
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    // Listen for real-time M-Pesa payment confirmation from server
+    socket.on('deposit_success', (data) => {
+      balance += parseFloat(data.amount);
+      totalDeposited += parseFloat(data.amount);
+      renderUI();
+      closeModal('depositModal');
+      alert(`🎉 Payment of KSh ${data.amount} received! (Ref: ${data.receipt})`);
+    });
+
+    // ==========================================
+    // SERVER SOCKET ENGINE CONNECTIVITY
+    // ==========================================
+    socket.on('connect', () => {
+      $('stateBadge').textContent = 'Connected & Active';
+      $('stateBadge').style.color = '#22d39a';
+    });
+
+    socket.on('game_start', (data) => {
+      inRound = true;
+      roundNo++;
+      mult = 1.00;
+      generateLiveBots();
+      $('mult').classList.remove('crashed');
+      $('mult').textContent = '1.00x';
+      $('stateBadge').textContent = 'FLIGHT IN PROGRESS';
+      $('stateBadge').style.color = '#22d39a';
+
+      [1, 2].forEach(p => {
+        if (bets[p].active) {
+          $(`p${p}Status`).textContent = 'In Flight';
+          $(`p${p}Status`).style.color = '#22d39a';
+        }
+      });
+      renderUI();
+    });
+
+    socket.on('multiplier_update', (data) => {
+      mult = parseFloat(data.multiplier);
+      $('mult').textContent = mult.toFixed(2) + 'x';
+      updateLiveBots(mult);
+
+      [1, 2].forEach(p => {
+        let autoVal = parseFloat($(`b${p}Auto`).value);
+        if (bets[p].active && !bets[p].cashed && autoVal && mult >= autoVal) {
+          handleBetAction(p);
+        }
+      });
+
+      let progressPct = Math.min(1, (mult - 1) / 8);
+      drawGameScene(progressPct, false);
+      renderUI();
+    });
+
+    socket.on('game_crash', (data) => {
+      inRound = false;
+      playSound('crash');
+      
+      const crashPoint = parseFloat(data.multiplier);
+      $('mult').textContent = 'FLEW AWAY @ ' + crashPoint.toFixed(2) + 'x';
+      $('mult').classList.add('crashed');
+      $('stateBadge').textContent = 'ROUND CRASHED';
+      $('stateBadge').style.color = '#ff3d71';
+
+      [1, 2].forEach(p => {
+        if (bets[p].active && !bets[p].cashed) {
+          $(`p${p}Status`).textContent = 'Crashed';
+          $(`p${p}Status`).style.color = '#ff3d71';
+          addHistory(p, bets[p].amount, 'CRASHED', 0);
+        }
+        bets[p].active = false;
+        bets[p].cashed = false;
+        bets[p].payout = 0;
+      });
+
+      let pill = document.createElement('div');
+      pill.className = `pill ${crashPoint >= 2.0 ? 'hot' : ''}`;
+      pill.textContent = crashPoint.toFixed(2) + 'x';
+      $('rounds').prepend(pill);
+
+      drawGameScene(1, true);
+      renderUI();
+    });
+
+    function handleBetAction(p) {
+      const b = bets[p];
+      if (inRound) {
+        if (b.active && !b.cashed) {
+          b.cashed = true;
+          b.payout = b.amount * mult;
+          balance += b.payout;
+          playSound('win');
+          $(`p${p}Status`).textContent = `Cashed @ ${mult.toFixed(2)}x`;
+          $(`p${p}Status`).style.color = '#22d39a';
+          addHistory(p, b.amount, `${mult.toFixed(2)}x`, b.payout);
+          renderUI();
+        }
+      } else {
+        if (!b.active) {
+          let amt = parseFloat($(`b${p}Amount`).value);
+          if (!amt || amt < 10 || amt > balance) return alert('Invalid virtual bet amount');
+          b.active = true; b.cashed = false; b.amount = amt;
+          balance -= amt; volume += amt;
+          playSound('bet');
+          $(`p${p}Status`).textContent = 'Queued';
+          $(`p${p}Status`).style.color = '#ffb62e';
+          renderUI();
+        } else {
+          balance += b.amount; volume -= b.amount;
+          b.active = false;
+          $(`p${p}Status`).textContent = '—';
+          renderUI();
+        }
+      }
+    }
+
+    function addHistory(panel, betAmt, res, payout) {
+      $('hist').insertAdjacentHTML('afterbegin', 
+        `<tr><td>#${roundNo}</td><td>Panel ${panel}</td><td>${money(betAmt)}</td><td><span class="${payout>0?'badge-win':'badge-loss'}">${res}</span></td><td>${money(payout)}</td></tr>`
+      );
+    }
+
+    function renderUI() {
+      $('bal').textContent = money(balance);
+      $('wbal').textContent = money(balance);
+      $('wdep').textContent = money(totalDeposited);
+      
+      let totalActive = (bets[1].active && !bets[1].cashed ? bets[1].amount : 0) + (bets[2].active && !bets[2].cashed ? bets[2].amount : 0);
+      $('totBet').textContent = money(totalActive);
+      $('totProfit').textContent = money((bets[1].payout + bets[2].payout));
+
+      if (inRound) {
+        if (bets[1].active && !bets[1].cashed) {
+          $('b1Btn').className = 'btn btn-cash';
+          $('b1Btn').textContent = `CASH OUT (${money(bets[1].amount * mult)})`;
+          $('b1Btn').disabled = false;
+        } else {
+          $('b1Btn').className = 'btn btn-bet';
+          $('b1Btn').textContent = 'IN ROUND';
+          $('b1Btn').disabled = true;
+        }
+      } else {
+        $('b1Btn').disabled = false;
+        $('b1Btn').className = bets[1].active ? 'btn btn-cash' : 'btn btn-bet';
+        $('b1Btn').textContent = bets[1].active ? 'CANCEL' : 'PLACE BET';
+      }
+
+      if (inRound) {
+        if (bets[2].active && !bets[2].cashed) {
+          $('b2Btn').className = 'btn btn-cash';
+          $('b2Btn').textContent = `CASH OUT (${money(bets[2].amount * mult)})`;
+          $('b2Btn').disabled = false;
+        } else {
+          $('b2Btn').className = 'btn btn-bet';
+          $('b2Btn').textContent = 'IN ROUND';
+          $('b2Btn').disabled = true;
+        }
+      } else {
+        $('b2Btn').disabled = false;
+        $('b2Btn').className = bets[2].active ? 'btn btn-cash' : 'btn btn-bet';
+        $('b2Btn').textContent = bets[2].active ? 'CANCEL' : 'PLACE BET';
+      }
+
+      $('adminRounds').textContent = roundNo;
+      $('adminVol').textContent = money(volume);
+    }
+
+    function drawGameScene(progressPct, crashed) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      ctx.fillStyle = '#ffffff';
+      stars.forEach(s => {
+        s.y += s.speed;
+        if (s.y > canvas.height) s.y = 0;
+        ctx.beginPath(); ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2); ctx.fill();
+      });
+
+      let startX = 50, startY = canvas.height - 50;
+      let targetX = canvas.width * 0.8;
+      let targetY = canvas.height * 0.25;
+
+      let currentX = startX + (targetX - startX) * progressPct;
+      let currentY = startY - (startY - targetY) * progressPct;
+
+      ctx.beginPath();
+      ctx.moveTo(startX, startY);
+      ctx.quadraticCurveTo(startX + (currentX - startX) * 0.5, startY, currentX, currentY);
+      ctx.strokeStyle = crashed ? '#ff3d71' : '#22d39a';
+      ctx.lineWidth = 4;
+      ctx.shadowBlur = 12; ctx.shadowColor = ctx.strokeStyle;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      if (inRound && !crashed) {
+        particles.push({ x: currentX - 10, y: currentY + 10, size: Math.random() * 8 + 4, opacity: 1 });
+      }
+
+      particles.forEach((p, idx) => {
+        p.opacity -= 0.02;
+        p.x -= 1; p.y += 0.5;
+        ctx.fillStyle = crashed ? `rgba(255, 61, 113, ${p.opacity})` : `rgba(255, 255, 255, ${p.opacity})`;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
+        if (p.opacity <= 0) particles.splice(idx, 1);
+      });
+
+      ctx.font = '36px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(avatarChoice, currentX, currentY);
+    }
+
+    window.addEventListener('load', () => {
+      resizeCanvas();
+      generateLiveBots();
+    });
+  </script>
+</body>
+</html>
