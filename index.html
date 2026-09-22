@@ -18,6 +18,7 @@
     .navbtn { background: #1a2232; color: #fff; border: 1px solid #2a354a; padding: 8px 14px; border-radius: 9px; cursor: pointer; display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 13px; }
     .navbtn:hover { background: #222c40; }
     .navbtn.primary { background: #ff3d71; border-color: #ff3d71; }
+    .navbtn.danger { background: #e74c3c; border-color: #c0392b; }
     
     .wrap { max-width: 1400px; margin: 20px auto; padding: 0 16px; }
     .tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
@@ -53,6 +54,7 @@
     .btn:hover { opacity: 0.9; }
     .btn-bet { background: #22d39a; color: #070a12; }
     .btn-cash { background: #ffb62e; color: #070a12; }
+    .btn-withdraw { background: #e74c3c; color: #ffffff; }
     .btn-cash:disabled, .btn-bet:disabled { opacity: .35; cursor: not-allowed; }
     
     /* Sidebar Bets & Chat */
@@ -108,7 +110,8 @@
   <nav>
     <div class="logo">SKY<b>RUSH</b></div>
     <div class="nav-actions">
-      <button class="navbtn" onclick="openModal('depositModal')">💳 M-Pesa Deposit</button>
+      <button class="navbtn" onclick="openModal('depositModal')">💳 Deposit</button>
+      <button class="navbtn danger" onclick="openModal('withdrawModal')">💸 Withdraw</button>
       <button class="navbtn" id="soundBtn" onclick="toggleSound()">🔊 Sound On</button>
       <span id="userLabel" style="font-weight: 700; color: #aeb8c9; margin-right: 4px;">Guest</span> 
       <button class="navbtn" id="loginNavBtn" onclick="openModal('loginModal')">Login</button>
@@ -213,7 +216,10 @@
           <div class="row"><span>Total Active Bet</span><b id="totBet">KSh 0.00</b></div>
           <div class="row"><span>Current Profit</span><b id="totProfit">KSh 0.00</b></div>
           <hr style="border-color:#1e283d; margin: 15px 0;">
-          <button class="btn btn-bet" style="width: 100%;" onclick="openModal('depositModal')">Deposit via M-Pesa</button>
+          <div style="display: flex; gap: 8px; flex-direction: column;">
+            <button class="btn btn-bet" style="width: 100%;" onclick="openModal('depositModal')">Deposit via M-Pesa</button>
+            <button class="btn btn-withdraw" style="width: 100%;" onclick="openModal('withdrawModal')">Withdraw via M-Pesa</button>
+          </div>
         </div>
       </div>
     </section>
@@ -227,7 +233,10 @@
           <div class="stat">Virtual Deposits<strong id="wdep">KSh 0.00</strong></div>
           <div class="stat">Virtual Cashouts<strong id="wout">KSh 0.00</strong></div>
         </div>
-        <button class="btn btn-bet" onclick="openModal('depositModal')">Deposit via M-Pesa</button>
+        <div style="display: flex; gap: 10px;">
+          <button class="btn btn-bet" onclick="openModal('depositModal')">Deposit via M-Pesa</button>
+          <button class="btn btn-withdraw" onclick="openModal('withdrawModal')">Withdraw via M-Pesa</button>
+        </div>
       </div>
     </section>
 
@@ -258,6 +267,7 @@
   </div>
 
   <!-- MODALS -->
+  <!-- DEPOSIT MODAL -->
   <div class="modal" id="depositModal">
     <div class="modal-card">
       <button class="close-modal" onclick="closeModal('depositModal')">✕</button>
@@ -271,6 +281,21 @@
     </div>
   </div>
 
+  <!-- WITHDRAW MODAL -->
+  <div class="modal" id="withdrawModal">
+    <div class="modal-card">
+      <button class="close-modal" onclick="closeModal('withdrawModal')">✕</button>
+      <h2>Withdraw via M-Pesa</h2>
+      <label style="font-size: 12px; color: #aeb8c9;">Phone Number</label>
+      <input id="withdrawPhone" type="text" placeholder="254700000000" value="254700000000">
+      <label style="font-size: 12px; color: #aeb8c9;">Amount (KSh)</label>
+      <input id="withdrawAmount" type="number" min="10" placeholder="Enter amount">
+      <button class="btn btn-withdraw" id="withdrawBtn" style="width: 100%; margin-top: 10px;" onclick="sendWithdrawRequest()">Confirm Withdrawal</button>
+      <p id="withdrawMsg" style="margin-top: 12px; font-size: 13px; text-align: center; font-weight: 600;"></p>
+    </div>
+  </div>
+
+  <!-- LOGIN MODAL -->
   <div class="modal" id="loginModal">
     <div class="modal-card">
       <button class="close-modal" onclick="closeModal('loginModal')">✕</button>
@@ -283,6 +308,7 @@
     </div>
   </div>
 
+  <!-- REGISTER MODAL -->
   <div class="modal" id="regModal">
     <div class="modal-card">
       <button class="close-modal" onclick="closeModal('regModal')">✕</button>
@@ -300,7 +326,7 @@
   <script>
     const socket = io();
 
-    let balance = 1000, totalDeposited = 0, roundNo = 0, volume = 0;
+    let balance = 1000, totalDeposited = 0, totalCashedOut = 0, roundNo = 0, volume = 0;
     let inRound = false, mult = 1.00;
     let avatarChoice = '✈️';
     let soundEnabled = true;
@@ -524,11 +550,78 @@
     });
 
     // ==========================================
+    // FAKE M-PESA WITHDRAWAL REQUEST & SOCKETS
+    // ==========================================
+    async function sendWithdrawRequest() {
+      const phone = document.getElementById('withdrawPhone').value;
+      const amount = parseFloat(document.getElementById('withdrawAmount').value);
+      const msgEl = document.getElementById('withdrawMsg');
+      const btn = document.getElementById('withdrawBtn');
+
+      if (!phone) {
+        return alert('Please enter a valid phone number.');
+      }
+
+      if (isNaN(amount) || amount <= 0) {
+        msgEl.style.color = '#ff3d71';
+        msgEl.textContent = 'Please enter a valid amount.';
+        return;
+      }
+
+      if (amount > balance) {
+        msgEl.style.color = '#ff3d71';
+        msgEl.textContent = 'Insufficient balance for withdrawal.';
+        return;
+      }
+
+      btn.disabled = true;
+      msgEl.style.color = '#ffb62e';
+      msgEl.textContent = 'Submitting withdrawal request...';
+
+      try {
+        const res = await fetch('/api/mpesa/withdraw', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone, amount })
+        });
+
+        const data = await res.json();
+
+        if (res.ok && data.success) {
+          msgEl.style.color = '#22d39a';
+          msgEl.textContent = data.message;
+          if (data.newBalance !== undefined) {
+            balance = data.newBalance;
+            renderUI();
+          }
+        } else {
+          msgEl.style.color = '#ff3d71';
+          msgEl.textContent = data.error || 'Failed to request withdrawal.';
+        }
+      } catch (err) {
+        msgEl.style.color = '#ff3d71';
+        msgEl.textContent = 'Network error sending request.';
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    // Listen for completion of fake withdrawal processing
+    socket.on('withdraw_success', (data) => {
+      totalCashedOut += parseFloat(data.amount);
+      if (data.newBalance !== undefined) {
+        balance = data.newBalance;
+      }
+      renderUI();
+      closeModal('withdrawModal');
+      alert(`✅ M-Pesa Withdrawal Processed!\n\nAmount: KSh ${data.amount}\nPhone: ${data.phone}\nRef Code: ${data.receipt}`);
+    });
+
+    // ==========================================
     // SERVER SOCKET ENGINE CONNECTIVITY
     // ==========================================
     socket.on('connect', () => {
-      $('stateBadge').textContent = 'Connected & Active';
-      $('stateBadge').style.color = '#22d39a';
+      $('stateBadge').textContent = 'Connected & Active';$('stateBadge').style.color = '#22d39a';
     });
 
     socket.on('game_start', (data) => {
@@ -536,10 +629,8 @@
       roundNo++;
       mult = 1.00;
       generateLiveBots();
-      $('mult').classList.remove('crashed');
-      $('mult').textContent = '1.00x';
-      $('stateBadge').textContent = 'FLIGHT IN PROGRESS';
-      $('stateBadge').style.color = '#22d39a';
+      $('mult').classList.remove('crashed');$('mult').textContent = '1.00x';
+      $('stateBadge').textContent = 'FLIGHT IN PROGRESS';$('stateBadge').style.color = '#22d39a';
 
       [1, 2].forEach(p => {
         if (bets[p].active) {
@@ -574,8 +665,7 @@
       const crashPoint = parseFloat(data.multiplier);
       $('mult').textContent = 'FLEW AWAY @ ' + crashPoint.toFixed(2) + 'x';
       $('mult').classList.add('crashed');
-      $('stateBadge').textContent = 'ROUND CRASHED';
-      $('stateBadge').style.color = '#ff3d71';
+      $('stateBadge').textContent = 'ROUND CRASHED';$('stateBadge').style.color = '#ff3d71';
 
       [1, 2].forEach(p => {
         if (bets[p].active && !bets[p].cashed) {
@@ -636,23 +726,19 @@
     }
 
     function renderUI() {
-      $('bal').textContent = money(balance);
-      $('wbal').textContent = money(balance);
-      $('wdep').textContent = money(totalDeposited);
+      $('bal').textContent = money(balance);$('wbal').textContent = money(balance);
+      $('wdep').textContent = money(totalDeposited);$('wout').textContent = money(totalCashedOut);
       
       let totalActive = (bets[1].active && !bets[1].cashed ? bets[1].amount : 0) + (bets[2].active && !bets[2].cashed ? bets[2].amount : 0);
-      $('totBet').textContent = money(totalActive);
-      $('totProfit').textContent = money((bets[1].payout + bets[2].payout));
+      $('totBet').textContent = money(totalActive);$('totProfit').textContent = money((bets[1].payout + bets[2].payout));
 
       if (inRound) {
         if (bets[1].active && !bets[1].cashed) {
-          $('b1Btn').className = 'btn btn-cash';
-          $('b1Btn').textContent = `CASH OUT (${money(bets[1].amount * mult)})`;
+          $('b1Btn').className = 'btn btn-cash';$('b1Btn').textContent = `CASH OUT (${money(bets[1].amount * mult)})`;
           $('b1Btn').disabled = false;
         } else {
           $('b1Btn').className = 'btn btn-bet';
-          $('b1Btn').textContent = 'IN ROUND';
-          $('b1Btn').disabled = true;
+          $('b1Btn').textContent = 'IN ROUND';$('b1Btn').disabled = true;
         }
       } else {
         $('b1Btn').disabled = false;
@@ -662,13 +748,11 @@
 
       if (inRound) {
         if (bets[2].active && !bets[2].cashed) {
-          $('b2Btn').className = 'btn btn-cash';
-          $('b2Btn').textContent = `CASH OUT (${money(bets[2].amount * mult)})`;
+          $('b2Btn').className = 'btn btn-cash';$('b2Btn').textContent = `CASH OUT (${money(bets[2].amount * mult)})`;
           $('b2Btn').disabled = false;
         } else {
           $('b2Btn').className = 'btn btn-bet';
-          $('b2Btn').textContent = 'IN ROUND';
-          $('b2Btn').disabled = true;
+          $('b2Btn').textContent = 'IN ROUND';$('b2Btn').disabled = true;
         }
       } else {
         $('b2Btn').disabled = false;
