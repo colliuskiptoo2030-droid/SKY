@@ -79,7 +79,7 @@ function getTimestamp() {
 // 2. API ENDPOINTS
 // ==========================================
 
-// Initiate M-Pesa STK Push
+// Initiate M-Pesa STK Push (Deposit)
 app.post('/api/mpesa/stkpush', getMpesaToken, async (req, res) => {
     try {
         const { phone, amount, userId } = req.body;
@@ -137,6 +137,47 @@ app.post('/api/mpesa/stkpush', getMpesaToken, async (req, res) => {
             details: error.response?.data || error.message 
         });
     }
+});
+
+// FAKE WITHDRAWAL ENDPOINT
+app.post('/api/mpesa/withdraw', (req, res) => {
+    const { phone, amount } = req.body;
+
+    if (!phone || !amount) {
+        return res.status(400).json({ error: "Phone number and amount are required." });
+    }
+
+    const withdrawAmount = Number(amount);
+    const currentBalance = userBalances[phone] || 0;
+
+    if (currentBalance < withdrawAmount) {
+        return res.status(400).json({ error: "Insufficient balance for withdrawal." });
+    }
+
+    // Deduct balance locally
+    userBalances[phone] -= withdrawAmount;
+
+    console.log(`⏳ Fake withdrawal requested: Phone ${phone}, Amount KES ${withdrawAmount}`);
+
+    // Respond immediately to UI that request was accepted
+    res.status(200).json({
+        success: true,
+        message: "Withdrawal request submitted successfully. Processing via M-Pesa...",
+        newBalance: userBalances[phone]
+    });
+
+    // Simulate delayed success response (3 seconds later)
+    setTimeout(() => {
+        const fakeReceipt = 'WS' + Math.random().toString(36).substring(2, 10).toUpperCase();
+        console.log(`✅ Fake Withdrawal Processed: KES ${withdrawAmount} sent to ${phone} (Ref: ${fakeReceipt})`);
+
+        io.emit('withdraw_success', {
+            phone,
+            amount: withdrawAmount,
+            receipt: fakeReceipt,
+            newBalance: userBalances[phone]
+        });
+    }, 3000);
 });
 
 // M-Pesa Callback Endpoint (Webhook)
